@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNF Opportunity Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 2px dashed #ccc;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+            background: #f8f9ff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+        #fileInput {
+            display: none;
+        }
+        .results {
+            display: none;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .wells-card .stat-value { color: #6f42c1; }
+        .amazon-card .stat-value { color: #fd7e14; }
+        .opportunity-card .stat-value { color: #e74c3c; }
+        .section {
+            background: white;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            background: #007bff;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-content {
+            padding: 20px;
+            display: none;
+        }
+        .section.expanded .section-content {
+            display: block;
+        }
+        .opportunity-section .section-header { background: #e74c3c; }
+        .payment-section .section-header { background: #6f42c1; }
+        .chart-section .section-header { background: #28a745; }
+        .pattern-section { border-left: 4px solid #805ad5; }
+        .pattern-section .section-header { background: #805ad5; }
+        .fraud-section { border-left: 4px solid #e53e3e; }
+        .fraud-section .section-header { background: #e53e3e; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        .alert {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .alert:hover { background: #fef5e7; }
+        .success { background: #d4edda; border-left: 4px solid #28a745; }
+        .danger { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .high-risk { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .medium-risk { background: #fff3cd; border-left: 4px solid #ffc107; }
+        .low-risk { background: #d4edda; border-left: 4px solid #28a745; }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .export-btn {
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        .export-btn:hover { background: #218838; }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: black; }
+        .progress-bar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 20px;
+            background-color: #007bff;
+            border-radius: 10px;
+            transition: width 0.3s;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            font-size: 12px;
+        }
+        .payment-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .payment-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #6f42c1;
+        }
+        .payment-card.amazon { border-left-color: #fd7e14; }
+        .payment-card h4 { margin-bottom: 10px; }
+        .wells-color { color: #6f42c1; }
+        .amazon-color { color: #fd7e14; }
+        .opportunity-score {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            color: white;
+            font-size: 0.9em;
+        }
+        .score-critical { background-color: #dc3545; }
+        .score-high { background-color: #fd7e14; }
+        .score-medium { background-color: #ffc107; color: #333; }
+        .score-low { background-color: #28a745; }
+        .opportunity-breakdown {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #e74c3c;
+        }
+        .score-component {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .score-component:last-child { border-bottom: none; }
+        .chart-controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .chart-controls label {
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .chart-controls select {
+            padding: 5px 10px;
+            margin-right: 15px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SNF Opportunity Analyzer</h1>
+            <p>Advanced facility scoring with cost-saving and fraud opportunity assessment</p>
+        </div>
+
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept=".csv">
+            <h3>📁 Click here or drag & drop your CSV file</h3>
+            <p>Enhanced with facility opportunity scoring</p>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <p id="loadingText">Analyzing your transaction data...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+        </div>
+
+        <div class="results">
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSpending">$0</div>
+                    <div>Total Spending</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalTransactions">0</div>
+                    <div>Transactions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFacilities">0</div>
+                    <div>Facilities</div>
+                </div>
+                <div class="stat-card wells-card">
+                    <div class="stat-value" id="wellsSpending">$0</div>
+                    <div>💳 Wells Fargo</div>
+                </div>
+                <div class="stat-card amazon-card">
+                    <div class="stat-value" id="amazonSpending">$0</div>
+                    <div>📦 Amazon Direct</div>
+                </div>
+                <div class="stat-card opportunity-card">
+                    <div class="stat-value" id="avgOpportunityScore">0</div>
+                    <div>Avg Opportunity Score</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="potentialSavings" style="color: #28a745;">$0</div>
+                    <div>Potential Savings</div>
+                </div>
+            </div>
+
+            <div class="section opportunity-section expanded">
+                <div class="section-header" onclick="toggleSection(this)">
+                    🎯 Facility Opportunity Scores
+                    <span>▼</span>
+                </div>
+                <div class="section-content" id="opportunitySection"></div>
+            </div>
+
+            <div class="section payment-section expanded">
+                <div class="section-header" onclick="toggleSection(this)">
+                    💳 Payment Method Analysis
+                    <span>▼</span>
+                </div>
+                <div class="section-content" id="paymentAnalysisSection"></div>
+            </div>
+
+            <div class="section chart-section expanded">
+                <div class="section-header" onclick="toggleSection(this)">
+                    📈 Full Year Daily Spending Trends
+                    <span>▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="chart-controls">
+                        <label>View:</label>
+                        <select id="chartTimeRange">
+                            <option value="all">Full Year</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="60">Last 60 Days</option>
+                            <option value="30">Last 30 Days</option>
+                        </select>
+                        <label>Show:</label>
+                        <select id="chartDataType">
+                            <option value="all">All Spending</option>
+                            <option value="wells">Wells Fargo Only</option>
+                            <option value="amazon">Amazon Only</option>
+                        </select>
+                    </div>
+                    <canvas id="dailySpendingChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+
+            <div class="section fraud-section expanded">
+                <div class="section-header" onclick="toggleSection(this)">
+                    🚨 Basic Fraud Indicators
+                    <span>▼</span>
+                </div>
+                <div class="section-content" id="basicFraudSection"></div>
+            </div>
+
+            <div class="section pattern-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    🔍 Advanced Pattern Analysis
+                    <span>▶</span>
+                </div>
+                <div class="section-content" id="patternSection"></div>
+            </div>
+            
+            <div class="section" style="border-left: 4px solid #17a2b8;">
+                <div class="section-header" onclick="toggleSection(this)" style="background: #17a2b8;">
+                    📅 Payment Method Timing Analysis
+                    <span>▶</span>
+                </div>
+                <div class="section-content" id="timingAnalysisSection"></div>
+            </div>
+
+            <div class="section expanded">
+                <div class="section-header" onclick="toggleSection(this)">
+                    💰 Cost-Saving Opportunities
+                    <span>▼</span>
+                </div>
+                <div class="section-content" id="savingsSection"></div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    📊 Detailed Analysis Tables
+                    <span>▶</span>
+                </div>
+                <div class="section-content">
+                    <div style="margin-bottom: 20px;">
+                        <h4>Facility Opportunity Ranking</h4>
+                        <table id="opportunityTable">
+                            <thead>
+                                <tr><th>Rank</th><th>Facility</th><th>Opportunity Score</th><th>Total Spending</th><th>💳 Wells Fargo</th><th>📦 Amazon Direct</th><th>Clinical/Benefits</th><th>Transactions</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h4>Master Contract Candidates</h4>
+                        <table id="contractTable">
+                            <thead>
+                                <tr><th>Category</th><th>Total Spend</th><th>Payment Split</th><th>Transactions</th><th>Facilities</th><th>Potential Savings</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="export-btn" onclick="exportResults()">📄 Export Report</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for detailed views -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">
+                <h2 id="modalTitle">Details</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        let analysisResults = null;
+        let transactions = [];
+        let facilityOpportunityScores = [];
+        let dailySpendingChart = null;
+
+        // File handling
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        const uploadArea = document.querySelector('.upload-area');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(e) {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        }
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                alert('Please select a CSV file');
+                return;
+            }
+
+            document.querySelector('.loading').style.display = 'block';
+            document.querySelector('.results').style.display = 'none';
+            updateProgress(10, 'Reading file...');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                setTimeout(() => processCSVFast(csv), 100);
+            };
+            reader.readAsText(file);
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressFill').textContent = percent + '%';
+            document.getElementById('loadingText').textContent = text;
+        }
+
+        function processCSVFast(csvText) {
+            try {
+                updateProgress(20, 'Parsing CSV data...');
+                
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                
+                // Find column indices
+                const netIndex = headers.findIndex(h => h.includes('NET'));
+                const facilityIndex = headers.findIndex(h => h.includes('Facility'));
+                const categoryIndex = headers.findIndex(h => h.includes('Account Description'));
+                const dateIndex = headers.findIndex(h => h.includes('TRX Date'));
+                const vendorIndex = headers.findIndex(h => h.includes('Originating Master Name'));
+                const referenceIndex = headers.findIndex(h => h.includes('Reference'));
+                const invoiceTypeIndex = headers.findIndex(h => h.includes('INVOICE/WELLS'));
+                
+                if (netIndex === -1 || facilityIndex === -1 || categoryIndex === -1) {
+                    throw new Error('Required columns not found in CSV');
+                }
+
+                updateProgress(40, 'Processing transactions...');
+                transactions = [];
+                
+                // Process in chunks to avoid blocking
+                const chunkSize = 1000;
+                let processedLines = 0;
+                
+                const processChunk = () => {
+                    const endIndex = Math.min(processedLines + chunkSize, lines.length);
+                    
+                    for (let i = processedLines === 0 ? 1 : processedLines; i < endIndex; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        
+                        const columns = parseCSVLine(line);
+                        if (columns.length < Math.max(netIndex, facilityIndex, categoryIndex, dateIndex) + 1) continue;
+                        
+                        const amount = parseFloat(columns[netIndex].replace(/[,$\s]/g, ''));
+                        if (isNaN(amount) || amount <= 0) continue;
+                        
+                        const vendor = vendorIndex >= 0 ? columns[vendorIndex].trim() : '';
+                        const reference = referenceIndex >= 0 ? columns[referenceIndex].trim() : '';
+                        const invoiceType = invoiceTypeIndex >= 0 ? columns[invoiceTypeIndex].trim() : '';
+                        const dateStr = dateIndex >= 0 ? columns[dateIndex].trim() : '';
+                        const category = columns[categoryIndex].trim();
+                        
+                        // Determine payment method
+                        let paymentMethod = 'Unknown';
+                        if (invoiceType.includes('WELLS') || reference.toLowerCase().includes('wells')) {
+                            paymentMethod = 'Wells Fargo';
+                        } else if (vendor.includes('AMAZON') || reference.includes('Invoice Import') || reference.includes('image')) {
+                            paymentMethod = 'Amazon Direct';
+                        }
+                        
+                        // Identify clinical supplies and employee benefits
+                        const isClinicalSupplies = isClinicalSupplyCategory(category);
+                        const isEmployeeBenefits = isEmployeeBenefitsCategory(category);
+                        
+                        transactions.push({
+                            amount: amount,
+                            facility: columns[facilityIndex].trim(),
+                            category: category,
+                            date: dateStr,
+                            month: getMonthFromDate(dateStr),
+                            vendor: vendor,
+                            reference: reference,
+                            invoiceType: invoiceType,
+                            paymentMethod: paymentMethod,
+                            isClinicalSupplies: isClinicalSupplies,
+                            isEmployeeBenefits: isEmployeeBenefits,
+                            isRoundAmount: (amount >= 50 && amount % 50 === 0),
+                            isDuplicateCandidate: true // Will be calculated later
+                        });
+                    }
+                    
+                    processedLines = endIndex;
+                    const progress = 40 + (processedLines / lines.length) * 30;
+                    updateProgress(Math.round(progress), `Processing ${processedLines}/${lines.length} rows...`);
+                    
+                    if (processedLines < lines.length) {
+                        setTimeout(processChunk, 10);
+                    } else {
+                        if (transactions.length === 0) {
+                            throw new Error('No valid transactions found');
+                        }
+                        updateProgress(75, 'Calculating opportunity scores...');
+                        setTimeout(analyzeDataFast, 100);
+                    }
+                };
+                
+                processChunk();
+                
+            } catch (error) {
+                console.error('Error processing CSV:', error);
+                alert('Error processing CSV: ' + error.message);
+                document.querySelector('.loading').style.display = 'none';
+            }
+        }
+
+        function isClinicalSupplyCategory(category) {
+            const clinicalKeywords = [
+                'NURSING', 'SUPPLIES', 'THERAPY', 'MEDICAL', 'CLINICAL', 'PATIENT',
+                'DIETARY', 'PHARMACY', 'LAB', 'WOUND', 'INCONTINENCE',
+                'HOUSE/OTC', 'NON CHARGEABLE', 'CHARGEABLE'
+            ];
+            const upperCategory = category.toUpperCase();
+            return clinicalKeywords.some(keyword => upperCategory.includes(keyword));
+        }
+
+        function isEmployeeBenefitsCategory(category) {
+            const benefitsKeywords = [
+                'EMPLOYEE BENEFITS', 'OTHER EMPLOYEE BENEFITS', 'BENEFITS',
+                'PAYROLL', 'STAFF', 'EMPLOYEE', 'TRAINING', 'EDUCATION'
+            ];
+            const upperCategory = category.toUpperCase();
+            return benefitsKeywords.some(keyword => upperCategory.includes(keyword));
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        function getMonthFromDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            try {
+                const parts = dateStr.split('/');
+                if (parts.length >= 2) {
+                    const month = parseInt(parts[0]);
+                    const year = parts.length >= 3 ? parts[2] : '2025';
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${monthNames[month - 1]} ${year}`;
+                }
+            } catch (e) {}
+            return dateStr;
+        }
+
+        function analyzeDataFast() {
+            updateProgress(80, 'Running analysis...');
+            
+            const analysis = performBasicAnalysis();
+            const patterns = performFastPatternAnalysis();
+            facilityOpportunityScores = calculateFacilityOpportunityScores(analysis, patterns);
+            
+            analysisResults = { ...analysis, patterns };
+            
+            updateProgress(95, 'Updating dashboard...');
+            setTimeout(() => {
+                displayResults();
+                document.querySelector('.loading').style.display = 'none';
+                document.querySelector('.results').style.display = 'block';
+                updateProgress(100, 'Complete!');
+            }, 200);
+        }
+
+        function performBasicAnalysis() {
+            const analysis = {
+                totalSpending: 0,
+                totalTransactions: transactions.length,
+                facilities: new Set(),
+                categories: {},
+                facilityTotals: {},
+                paymentMethods: {},
+                dailySpending: {},
+                duplicateAmounts: {},
+                highValueTxns: [],
+                roundAmounts: [],
+                masterContractCandidates: []
+            };
+
+            // Quick pass through data
+            const amounts = transactions.map(t => t.amount).sort((a, b) => b - a);
+            const p99Threshold = amounts[Math.floor(amounts.length * 0.01)] || 500;
+
+            // First pass: collect basic data
+            transactions.forEach(txn => {
+                analysis.totalSpending += txn.amount;
+                analysis.facilities.add(txn.facility);
+
+                // Track duplicate amounts
+                const amountKey = txn.amount.toFixed(2);
+                if (!analysis.duplicateAmounts[amountKey]) {
+                    analysis.duplicateAmounts[amountKey] = [];
+                }
+                analysis.duplicateAmounts[amountKey].push(txn);
+
+                // Payment method analysis
+                if (!analysis.paymentMethods[txn.paymentMethod]) {
+                    analysis.paymentMethods[txn.paymentMethod] = { total: 0, count: 0 };
+                }
+                analysis.paymentMethods[txn.paymentMethod].total += txn.amount;
+                analysis.paymentMethods[txn.paymentMethod].count += 1;
+                
+                // Daily spending analysis - use full date for full year view
+                const dateKey = txn.date.split(' ')[0] || txn.date;
+                if (!analysis.dailySpending[dateKey]) {
+                    analysis.dailySpending[dateKey] = { total: 0, wells: 0, amazon: 0 };
+                }
+                analysis.dailySpending[dateKey].total += txn.amount;
+                if (txn.paymentMethod === 'Wells Fargo') {
+                    analysis.dailySpending[dateKey].wells += txn.amount;
+                } else if (txn.paymentMethod === 'Amazon Direct') {
+                    analysis.dailySpending[dateKey].amazon += txn.amount;
+                }
+
+                // Facility analysis
+                if (!analysis.facilityTotals[txn.facility]) {
+                    analysis.facilityTotals[txn.facility] = { 
+                        total: 0, count: 0, wells: 0, amazon: 0, 
+                        clinicalSupplies: 0, employeeBenefits: 0,
+                        roundAmounts: 0, categories: new Set()
+                    };
+                }
+                analysis.facilityTotals[txn.facility].total += txn.amount;
+                analysis.facilityTotals[txn.facility].count += 1;
+                analysis.facilityTotals[txn.facility].categories.add(txn.category);
+                
+                if (txn.paymentMethod === 'Wells Fargo') {
+                    analysis.facilityTotals[txn.facility].wells += txn.amount;
+                } else if (txn.paymentMethod === 'Amazon Direct') {
+                    analysis.facilityTotals[txn.facility].amazon += txn.amount;
+                }
+                
+                if (txn.isClinicalSupplies) {
+                    analysis.facilityTotals[txn.facility].clinicalSupplies += txn.amount;
+                }
+                if (txn.isEmployeeBenefits) {
+                    analysis.facilityTotals[txn.facility].employeeBenefits += txn.amount;
+                }
+                if (txn.isRoundAmount) {
+                    analysis.facilityTotals[txn.facility].roundAmounts += txn.amount;
+                }
+
+                // Category analysis
+                if (!analysis.categories[txn.category]) {
+                    analysis.categories[txn.category] = { 
+                        total: 0, 
+                        count: 0, 
+                        facilities: new Set(),
+                        wells: 0,
+                        amazon: 0
+                    };
+                }
+                analysis.categories[txn.category].total += txn.amount;
+                analysis.categories[txn.category].count += 1;
+                analysis.categories[txn.category].facilities.add(txn.facility);
+                if (txn.paymentMethod === 'Wells Fargo') {
+                    analysis.categories[txn.category].wells += txn.amount;
+                } else if (txn.paymentMethod === 'Amazon Direct') {
+                    analysis.categories[txn.category].amazon += txn.amount;
+                }
+
+                // High-value and round amounts (sample for display)
+                if (Math.random() < 0.1) { // Sample 10% for display
+                    if (txn.amount > p99Threshold) {
+                        analysis.highValueTxns.push(txn);
+                    }
+                    if (txn.amount >= 50 && txn.amount % 50 === 0) {
+                        analysis.roundAmounts.push(txn);
+                    }
+                }
+            });
+
+            // Second pass: mark duplicate amounts
+            Object.entries(analysis.duplicateAmounts).forEach(([amount, txns]) => {
+                if (txns.length >= 5) {
+                    txns.forEach(txn => txn.isDuplicateAmount = true);
+                }
+            });
+
+            // Master contract candidates
+            Object.entries(analysis.categories).forEach(([category, data]) => {
+                const facilityCount = data.facilities.size;
+                if (data.count >= 10 && facilityCount >= 3 && data.total >= 500) {
+                    analysis.masterContractCandidates.push({
+                        category,
+                        total: data.total,
+                        count: data.count,
+                        facilities: facilityCount,
+                        savings: data.total * 0.15
+                    });
+                }
+            });
+
+            analysis.masterContractCandidates.sort((a, b) => b.total - a.total);
+            analysis.highValueTxns.sort((a, b) => b.amount - a.amount);
+
+            analysis.totalFacilities = analysis.facilities.size;
+            analysis.potentialSavings = analysis.masterContractCandidates.reduce((sum, c) => sum + c.savings, 0);
+
+            return analysis;
+        }
+
+        function calculateFacilityOpportunityScores(analysis, patterns) {
+            const facilityScores = [];
+            
+            Object.entries(analysis.facilityTotals).forEach(([facility, data]) => {
+                // Calculate different score components
+                const clinicalBenefitsSpend = data.clinicalSupplies + data.employeeBenefits;
+                const clinicalBenefitsScore = Math.min((clinicalBenefitsSpend / 10000) * 20, 25); // Max 25 points
+                
+                const masterContractScore = Math.min((data.categories.size / 10) * 15, 20); // Max 20 points
+                
+                const duplicateRoundScore = Math.min((data.roundAmounts / 1000) * 10, 15); // Max 15 points
+                
+                const transactionVolumeScore = Math.min((data.count / 100) * 15, 20); // Max 20 points
+                
+                // Get timing clusters for this facility (Amazon Direct only for real timing issues)
+                const facilityClusters = patterns.timingClusters.filter(c => 
+                    c.facility === facility && c.paymentMethod === 'Amazon Direct'
+                );
+                const clusterScore = Math.min(facilityClusters.length * 5, 20); // Max 20 points
+                
+                const totalScore = Math.round(
+                    clinicalBenefitsScore + 
+                    masterContractScore + 
+                    duplicateRoundScore + 
+                    transactionVolumeScore + 
+                    clusterScore
+                );
+                
+                facilityScores.push({
+                    facility: facility,
+                    totalScore: totalScore,
+                    totalSpending: data.total,
+                    wellsSpending: data.wells,
+                    amazonSpending: data.amazon,
+                    clinicalBenefitsSpend: clinicalBenefitsSpend,
+                    transactionCount: data.count,
+                    roundAmountSpend: data.roundAmounts,
+                    categoryCount: data.categories.size,
+                    clusterCount: facilityClusters.length,
+                    scoreBreakdown: {
+                        clinicalBenefits: Math.round(clinicalBenefitsScore),
+                        masterContract: Math.round(masterContractScore),
+                        duplicateRound: Math.round(duplicateRoundScore),
+                        transactionVolume: Math.round(transactionVolumeScore),
+                        clusters: Math.round(clusterScore)
+                    }
+                });
+            });
+            
+            return facilityScores.sort((a, b) => b.totalScore - a.totalScore);
+        }
+
+        function performFastPatternAnalysis() {
+            const patterns = {
+                timingClusters: findTimingClusters(),
+                duplicateAmounts: findDuplicateAmounts(),
+                endOfMonthSpikes: findEndOfMonthSpikes(),
+                suspiciousSequences: findSuspiciousSequences(),
+                riskScore: 0
+            };
+
+            // Calculate risk score
+            patterns.riskScore = Math.min(
+                patterns.timingClusters.length * 2 +
+                patterns.duplicateAmounts.length * 1 +
+                patterns.endOfMonthSpikes.length * 3 +
+                patterns.suspiciousSequences.length * 4,
+                100
+            );
+
+            return patterns;
+        }
+
+        function findTimingClusters() {
+            const dailyCounts = {};
+            const wellsStatementDates = {};
+            const clusters = [];
+
+            // Separate analysis for Amazon Direct transactions only (real purchase dates)
+            transactions.forEach(t => {
+                if (t.paymentMethod === 'Amazon Direct') {
+                    const key = `${t.facility}_${t.date}`;
+                    dailyCounts[key] = (dailyCounts[key] || 0) + 1;
+                } else if (t.paymentMethod === 'Wells Fargo') {
+                    // Track Wells Fargo statement dates separately
+                    const key = `${t.facility}_${t.date}`;
+                    if (!wellsStatementDates[key]) {
+                        wellsStatementDates[key] = { count: 0, totalAmount: 0 };
+                    }
+                    wellsStatementDates[key].count += 1;
+                    wellsStatementDates[key].totalAmount += t.amount;
+                }
+            });
+
+            // Find Amazon Direct timing clusters (actual suspicious patterns)
+            Object.entries(dailyCounts).forEach(([key, count]) => {
+                if (count > 8) {
+                    const [facility, date] = key.split('_', 2);
+                    clusters.push({
+                        facility,
+                        date,
+                        count,
+                        severity: count > 15 ? 'High' : 'Medium',
+                        type: 'Amazon Direct High Daily Volume',
+                        paymentMethod: 'Amazon Direct'
+                    });
+                }
+            });
+
+            // Analyze Wells Fargo statement patterns (different type of analysis)
+            Object.entries(wellsStatementDates).forEach(([key, data]) => {
+                // Look for unusually high statement totals or transaction counts
+                if (data.count > 20 || data.totalAmount > 5000) {
+                    const [facility, date] = key.split('_', 2);
+                    clusters.push({
+                        facility,
+                        date,
+                        count: data.count,
+                        totalAmount: data.totalAmount,
+                        severity: (data.count > 30 || data.totalAmount > 10000) ? 'High' : 'Medium',
+                        type: 'Wells Fargo High Statement Volume',
+                        paymentMethod: 'Wells Fargo'
+                    });
+                }
+            });
+
+            return clusters.sort((a, b) => b.count - a.count).slice(0, 50);
+        }
+
+        function findDuplicateAmounts() {
+            const amountCounts = {};
+            const duplicates = [];
+
+            transactions.forEach(t => {
+                const amount = t.amount.toFixed(2);
+                amountCounts[amount] = (amountCounts[amount] || 0) + 1;
+            });
+
+            Object.entries(amountCounts).forEach(([amount, count]) => {
+                if (count >= 8) {
+                    duplicates.push({
+                        amount: parseFloat(amount),
+                        count,
+                        severity: count > 15 ? 'High' : count > 10 ? 'Medium' : 'Low'
+                    });
+                }
+            });
+
+            return duplicates.sort((a, b) => b.count - a.count).slice(0, 15);
+        }
+
+        function findEndOfMonthSpikes() {
+            const monthlyData = {};
+            const spikes = [];
+
+            transactions.forEach(t => {
+                try {
+                    const parts = t.date.split('/');
+                    if (parts.length < 3) return;
+                    
+                    const month = parseInt(parts[0]);
+                    const day = parseInt(parts[1]);
+                    const year = parseInt(parts[2]);
+                    
+                    if (isNaN(month) || isNaN(day) || isNaN(year)) return;
+
+                    const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = { total: 0, endMonth: 0 };
+                    }
+
+                    monthlyData[monthKey].total += t.amount;
+                    if (day >= 28) {
+                        monthlyData[monthKey].endMonth += t.amount;
+                    }
+                } catch (e) {
+                    // Skip invalid dates
+                }
+            });
+
+            Object.entries(monthlyData).forEach(([month, data]) => {
+                if (data.total === 0) return;
+                const ratio = data.endMonth / data.total;
+                if (ratio > 0.4 && data.total > 2000) {
+                    spikes.push({
+                        month,
+                        percentage: (ratio * 100).toFixed(1),
+                        totalSpending: data.total,
+                        endSpending: data.endMonth,
+                        severity: ratio > 0.6 ? 'High' : 'Medium'
+                    });
+                }
+            });
+
+            return spikes.sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage));
+        }
+
+        function findSuspiciousSequences() {
+            const facilityRounds = {};
+            const sequences = [];
+
+            transactions.forEach(t => {
+                if (t.amount % 50 === 0 && t.amount >= 100) {
+                    facilityRounds[t.facility] = (facilityRounds[t.facility] || 0) + 1;
+                }
+            });
+
+            Object.entries(facilityRounds).forEach(([facility, count]) => {
+                if (count > 10) {
+                    sequences.push({
+                        facility,
+                        roundCount: count,
+                        severity: count > 20 ? 'High' : 'Medium',
+                        type: 'High Round Amount Frequency'
+                    });
+                }
+            });
+
+            return sequences.sort((a, b) => b.roundCount - a.roundCount);
+        }
+
+        function displayResults() {
+            // Update summary stats
+            document.getElementById('totalSpending').textContent = formatCurrency(analysisResults.totalSpending);
+            document.getElementById('totalTransactions').textContent = analysisResults.totalTransactions.toLocaleString();
+            document.getElementById('totalFacilities').textContent = analysisResults.totalFacilities;
+            document.getElementById('potentialSavings').textContent = formatCurrency(analysisResults.potentialSavings);
+            
+            // Update payment method stats
+            const wellsTotal = analysisResults.paymentMethods['Wells Fargo']?.total || 0;
+            const amazonTotal = analysisResults.paymentMethods['Amazon Direct']?.total || 0;
+            document.getElementById('wellsSpending').textContent = formatCurrency(wellsTotal);
+            document.getElementById('amazonSpending').textContent = formatCurrency(amazonTotal);
+
+            // Average opportunity score
+            const avgScore = facilityOpportunityScores.length > 0 ? 
+                facilityOpportunityScores.reduce((sum, f) => sum + f.totalScore, 0) / facilityOpportunityScores.length : 0;
+            document.getElementById('avgOpportunityScore').textContent = Math.round(avgScore);
+
+            // Update sections
+            updateOpportunitySection();
+            updatePaymentAnalysisSection();
+            createDailySpendingChart();
+            updateBasicFraudSection();
+            updatePatternSection();
+            updateSavingsSection();
+            updateTimingAnalysisSection();
+            updateTables();
+
+            // Add chart control event listeners
+            document.getElementById('chartTimeRange').addEventListener('change', updateChart);
+            document.getElementById('chartDataType').addEventListener('change', updateChart);
+        }
+
+        function updateOpportunitySection() {
+            const section = document.getElementById('opportunitySection');
+            const topFacilities = facilityOpportunityScores.slice(0, 10);
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <h4>Opportunity Scoring Methodology</h4>
+                    <div class="opportunity-breakdown">
+                        <strong>Score Components (0-100 scale):</strong>
+                        <div class="score-component"><span>Clinical Supplies & Employee Benefits Spending</span><span>0-25 points</span></div>
+                        <div class="score-component"><span>Master Contract Candidate Categories</span><span>0-20 points</span></div>
+                        <div class="score-component"><span>Round/Duplicate Amount Frequency</span><span>0-15 points</span></div>
+                        <div class="score-component"><span>Transaction Volume (management complexity)</span><span>0-20 points</span></div>
+                        <div class="score-component"><span>Purchase Timing Clusters (fraud risk)</span><span>0-20 points</span></div>
+                    </div>
+                </div>
+                
+                <h4>Top 10 Opportunity Facilities</h4>
+            `;
+
+            topFacilities.forEach((facility, index) => {
+                const scoreClass = facility.totalScore >= 75 ? 'score-critical' : 
+                                 facility.totalScore >= 60 ? 'score-high' :
+                                 facility.totalScore >= 40 ? 'score-medium' : 'score-low';
+                                 
+                html += `
+                    <div style="background: white; margin: 10px 0; padding: 15px; border-radius: 8px; border-left: 4px solid ${
+                        facility.totalScore >= 75 ? '#dc3545' : 
+                        facility.totalScore >= 60 ? '#fd7e14' :
+                        facility.totalScore >= 40 ? '#ffc107' : '#28a745'
+                    };">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h5 style="margin: 0;">#{index + 1} Facility ${facility.facility}</h5>
+                            <span class="opportunity-score ${scoreClass}">${facility.totalScore}/100</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.9em;">
+                            <div><strong>Total Spending:</strong> ${formatCurrency(facility.totalSpending)}</div>
+                            <div><strong>Clinical/Benefits:</strong> ${formatCurrency(facility.clinicalBenefitsSpend)}</div>
+                            <div><strong>Transactions:</strong> ${facility.transactionCount.toLocaleString()}</div>
+                            <div><strong>Categories:</strong> ${facility.categoryCount}</div>
+                        </div>
+                        <div style="margin-top: 10px; cursor: pointer;" onclick="showFacilityBreakdown('${facility.facility}')">
+                            <small style="color: #666;">📊 Click to see score breakdown</small>
+                        </div>
+                    </div>
+                `;
+            });
+
+            section.innerHTML = html;
+        }
+
+        function updatePaymentAnalysisSection() {
+            const paymentSection = document.getElementById('paymentAnalysisSection');
+            const wellsData = analysisResults.paymentMethods['Wells Fargo'] || { total: 0, count: 0 };
+            const amazonData = analysisResults.paymentMethods['Amazon Direct'] || { total: 0, count: 0 };
+            const unknownData = analysisResults.paymentMethods['Unknown'] || { total: 0, count: 0 };
+            
+            const wellsPercent = (wellsData.total / analysisResults.totalSpending * 100).toFixed(1);
+            const amazonPercent = (amazonData.total / analysisResults.totalSpending * 100).toFixed(1);
+            
+            let html = `
+                <div class="payment-breakdown">
+                    <div class="payment-card">
+                        <h4 style="color: #6f42c1;">💳 Wells Fargo Credit Card</h4>
+                        <div style="font-size: 1.5em; font-weight: bold;">${formatCurrency(wellsData.total)} (${wellsPercent}%)</div>
+                        <div>${wellsData.count.toLocaleString()} transactions</div>
+                        <div style="margin-top: 10px; color: #666; font-size: 0.9em;">Emergency/convenience purchases - high opportunity for reduction</div>
+                    </div>
+                    <div class="payment-card amazon">
+                        <h4 style="color: #fd7e14;">📦 Amazon Direct</h4>
+                        <div style="font-size: 1.5em; font-weight: bold;">${formatCurrency(amazonData.total)} (${amazonPercent}%)</div>
+                        <div>${amazonData.count.toLocaleString()} transactions</div>
+                        <div style="margin-top: 10px; color: #666; font-size: 0.9em;">Planned orders - opportunity for master contract pricing</div>
+                    </div>
+                </div>
+            `;
+            
+            if (unknownData.total > 0) {
+                html += `
+                    <div class="alert" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                        <strong>⚠️ Unknown Payment Method:</strong> ${formatCurrency(unknownData.total)} (${unknownData.count} transactions)
+                    </div>
+                `;
+            }
+            
+            paymentSection.innerHTML = html;
+        }
+        
+        function createDailySpendingChart() {
+            const ctx = document.getElementById('dailySpendingChart').getContext('2d');
+            updateChart(); // Use the new updateChart function
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('dailySpendingChart').getContext('2d');
+            const timeRange = document.getElementById('chartTimeRange').value;
+            const dataType = document.getElementById('chartDataType').value;
+            
+            // Prepare daily data, sorted by date
+            let dailyData = Object.entries(analysisResults.dailySpending)
+                .map(([date, data]) => {
+                    try {
+                        const parts = date.split('/');
+                        const sortableDate = parts.length >= 3 ? 
+                            new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1])) :
+                            new Date(date);
+                        return { date, sortableDate, ...data };
+                    } catch (e) {
+                        return { date, sortableDate: new Date(date), ...data };
+                    }
+                })
+                .filter(d => !isNaN(d.sortableDate.getTime()))
+                .sort((a, b) => a.sortableDate - b.sortableDate);
+            
+            // Apply time range filter
+            if (timeRange !== 'all') {
+                const days = parseInt(timeRange);
+                dailyData = dailyData.slice(-days);
+            }
+            
+            const labels = dailyData.map(d => {
+                return d.sortableDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            
+            // Prepare datasets based on data type selection
+            let datasets = [];
+            
+            if (dataType === 'all' || dataType === 'wells') {
+                datasets.push({
+                    label: '💳 Wells Fargo',
+                    data: dailyData.map(d => d.wells),
+                    borderColor: '#6f42c1',
+                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                    fill: dataType === 'wells',
+                    tension: 0.1,
+                    pointBackgroundColor: '#6f42c1',
+                    pointRadius: 1,
+                    pointHoverRadius: 5
+                });
+            }
+            
+            if (dataType === 'all' || dataType === 'amazon') {
+                datasets.push({
+                    label: '📦 Amazon Direct',
+                    data: dailyData.map(d => d.amazon),
+                    borderColor: '#fd7e14',
+                    backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                    fill: dataType === 'amazon',
+                    tension: 0.1,
+                    pointBackgroundColor: '#fd7e14',
+                    pointRadius: 1,
+                    pointHoverRadius: 5
+                });
+            }
+            
+            if (dataType === 'all') {
+                datasets.push({
+                    label: 'Total Daily Spending',
+                    data: dailyData.map(d => d.total),
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    pointBackgroundColor: '#007bff',
+                    pointRadius: 1,
+                    pointHoverRadius: 5
+                });
+            }
+            
+            // Destroy existing chart if it exists
+            if (dailySpendingChart) {
+                dailySpendingChart.destroy();
+            }
+            
+            const timeRangeText = timeRange === 'all' ? 'Full Year' : `Last ${timeRange} Days`;
+            
+            dailySpendingChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Daily Spending Trends (${timeRangeText}) - End-of-Month Spikes Visible`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                maxTicksLimit: 20
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Amount ($)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateBasicFraudSection() {
+            const basicFraudSection = document.getElementById('basicFraudSection');
+            basicFraudSection.innerHTML = `
+                <div class="alert danger" onclick="showHighValueTransactions()">
+                    <strong>High-Value Transactions:</strong> ${analysisResults.highValueTxns.length * 10} estimated (click to view sample)
+                </div>
+                <div class="alert danger" onclick="showRoundAmounts()">
+                    <strong>Round Amount Transactions:</strong> ${analysisResults.roundAmounts.length * 10} estimated (click to view sample)
+                </div>
+                <div class="alert">
+                    <strong>Top Risk Facility:</strong> ${Object.entries(analysisResults.facilityTotals).sort((a,b) => b[1].total - a[1].total)[0][0]} 
+                    with ${formatCurrency(Object.entries(analysisResults.facilityTotals).sort((a,b) => b[1].total - a[1].total)[0][1].total)}
+                </div>
+            `;
+        }
+
+        function updatePatternSection() {
+            const patterns = analysisResults.patterns;
+            const patternSection = document.getElementById('patternSection');
+            
+            const riskClass = patterns.riskScore > 30 ? 'high-risk' : patterns.riskScore > 15 ? 'medium-risk' : 'low-risk';
+            
+            let html = `
+                <div class="alert ${riskClass}">
+                    <strong>Overall Risk Score:</strong> ${patterns.riskScore}/100 
+                    (${patterns.riskScore > 30 ? 'High' : patterns.riskScore > 15 ? 'Medium' : 'Low'} Risk)
+                </div>
+            `;
+
+            const amazonClusters = patterns.timingClusters.filter(c => c.paymentMethod === 'Amazon Direct');
+            const wellsClusters = patterns.timingClusters.filter(c => c.paymentMethod === 'Wells Fargo');
+            
+            if (amazonClusters.length > 0) {
+                html += `
+                    <div class="alert medium-risk" onclick="showPatternDetail('amazonClusters', 'Amazon Direct Timing Clusters')">
+                        <strong>🕐 Amazon Timing Clusters:</strong> ${amazonClusters.length} facilities with suspicious daily Amazon purchases
+                    </div>
+                `;
+            }
+            
+            if (wellsClusters.length > 0) {
+                html += `
+                    <div class="alert medium-risk" onclick="showPatternDetail('wellsClusters', 'Wells Fargo Statement Analysis')">
+                        <strong>💳 Wells Fargo Statements:</strong> ${wellsClusters.length} facilities with high credit card statement volumes
+                    </div>
+                `;
+            }
+
+            if (patterns.duplicateAmounts.length > 0) {
+                html += `
+                    <div class="alert medium-risk" onclick="showPatternDetail('duplicateAmounts', 'Duplicate Amount Analysis')">
+                        <strong>🔄 Duplicate Amounts:</strong> ${patterns.duplicateAmounts.length} amounts appearing frequently
+                    </div>
+                `;
+            }
+
+            if (patterns.endOfMonthSpikes.length > 0) {
+                html += `
+                    <div class="alert high-risk" onclick="showPatternDetail('endOfMonthSpikes', 'End-of-Month Spikes')">
+                        <strong>📅 End-of-Month Spikes:</strong> ${patterns.endOfMonthSpikes.length} months with suspicious patterns
+                    </div>
+                `;
+            }
+
+            if (patterns.suspiciousSequences.length > 0) {
+                html += `
+                    <div class="alert high-risk" onclick="showPatternDetail('suspiciousSequences', 'Suspicious Round Amount Patterns')">
+                        <strong>🎯 Round Amount Patterns:</strong> ${patterns.suspiciousSequences.length} facilities with excessive round amounts
+                    </div>
+                `;
+            }
+
+            patternSection.innerHTML = html;
+        }
+        
+        function updateSavingsSection() {
+            const savingsSection = document.getElementById('savingsSection');
+            const topCandidate = analysisResults.masterContractCandidates[0];
+            const savingsRate = (analysisResults.potentialSavings / analysisResults.totalSpending * 100).toFixed(1);
+            
+            savingsSection.innerHTML = `
+                <div class="alert success">
+                    <strong>Total Potential Savings:</strong> ${formatCurrency(analysisResults.potentialSavings)} (${savingsRate}% of total spending)
+                </div>
+                <div class="alert success">
+                    <strong>Top Opportunity:</strong> ${topCandidate?.category || 'N/A'} - ${formatCurrency(topCandidate?.savings || 0)} potential savings
+                </div>
+                <div class="alert">
+                    <strong>Master Contract Candidates:</strong> ${analysisResults.masterContractCandidates.length} categories identified
+                </div>
+            `;
+        }
+
+        function updateTimingAnalysisSection() {
+            const section = document.getElementById('timingAnalysisSection');
+            const amazonClusters = analysisResults.patterns.timingClusters.filter(c => c.paymentMethod === 'Amazon Direct');
+            const wellsClusters = analysisResults.patterns.timingClusters.filter(c => c.paymentMethod === 'Wells Fargo');
+            
+            let html = `
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <h4 style="color: #1976d2; margin-bottom: 10px;">💡 Timing Analysis Methodology</h4>
+                    <p style="margin-bottom: 10px;"><strong>Amazon Direct:</strong> Analyzed by actual purchase dates - clusters indicate potential fraud or poor purchasing controls.</p>
+                    <p><strong>Wells Fargo Credit Card:</strong> Analyzed by statement processing dates (end-of-month) - high volumes indicate frequent emergency purchases.</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4>📦 Amazon Direct Timing Issues</h4>
+                        <div style="background: #fff3e0; padding: 15px; border-radius: 5px; border-left: 4px solid #ff9800;">
+                            <p><strong>${amazonClusters.length}</strong> facilities with suspicious Amazon purchase timing</p>
+                            <p style="font-size: 0.9em; color: #666; margin-top: 10px;">These represent actual purchase date clusters that may indicate:</p>
+                            <ul style="font-size: 0.9em; color: #666; margin: 5px 0 0 20px;">
+                                <li>Invoice splitting to avoid approval thresholds</li>
+                                <li>End-of-budget period bulk purchasing</li>
+                                <li>Fraudulent transaction patterns</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4>💳 Wells Fargo Statement Volumes</h4>
+                        <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; border-left: 4px solid #9c27b0;">
+                            <p><strong>${wellsClusters.length}</strong> facilities with high credit card statement volumes</p>
+                            <p style="font-size: 0.9em; color: #666; margin-top: 10px;">These represent monthly statement totals that may indicate:</p>
+                            <ul style="font-size: 0.9em; color: #666; margin: 5px 0 0 20px;">
+                                <li>Excessive emergency purchasing</li>
+                                <li>Poor inventory management</li>
+                                <li>Lack of planned procurement processes</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            if (amazonClusters.length > 0) {
+                html += `
+                    <div style="margin-top: 20px;">
+                        <h4>Top Amazon Direct Timing Issues:</h4>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #f5f5f5;">
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Facility</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Date</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Transactions</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Risk Level</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                amazonClusters.slice(0, 10).forEach(cluster => {
+                    const riskColor = cluster.severity === 'High' ? '#e53e3e' : '#ff9800';
+                    html += `
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd;">Facility ${cluster.facility}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd;">${cluster.date}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${cluster.count}</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; color: ${riskColor}; font-weight: bold;">${cluster.severity}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table></div>';
+            }
+            
+            section.innerHTML = html;
+        }
+
+        function updateTables() {
+            // Opportunity table
+            const opportunityTable = document.querySelector('#opportunityTable tbody');
+            opportunityTable.innerHTML = '';
+            facilityOpportunityScores.slice(0, 20).forEach((facility, index) => {
+                const row = opportunityTable.insertRow();
+                const scoreClass = facility.totalScore >= 75 ? 'score-critical' : 
+                                 facility.totalScore >= 60 ? 'score-high' :
+                                 facility.totalScore >= 40 ? 'score-medium' : 'score-low';
+                const wellsPercent = ((facility.wellsSpending / facility.totalSpending) * 100).toFixed(0);
+                const amazonPercent = ((facility.amazonSpending / facility.totalSpending) * 100).toFixed(0);
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>Facility ${facility.facility}</td>
+                    <td><span class="opportunity-score ${scoreClass}">${facility.totalScore}</span></td>
+                    <td>${formatCurrency(facility.totalSpending)}</td>
+                    <td class="wells-color">${formatCurrency(facility.wellsSpending)} (${wellsPercent}%)</td>
+                    <td class="amazon-color">${formatCurrency(facility.amazonSpending)} (${amazonPercent}%)</td>
+                    <td>${formatCurrency(facility.clinicalBenefitsSpend)}</td>
+                    <td>${facility.transactionCount.toLocaleString()}</td>
+                `;
+                
+                row.style.cursor = 'pointer';
+                row.onclick = () => showFacilityBreakdown(facility.facility);
+            });
+
+            // Contract table
+            const contractTable = document.querySelector('#contractTable tbody');
+            contractTable.innerHTML = '';
+            analysisResults.masterContractCandidates.slice(0, 15).forEach(candidate => {
+                const categoryData = analysisResults.categories[candidate.category];
+                const wellsPercent = ((categoryData.wells / categoryData.total) * 100).toFixed(0);
+                const amazonPercent = ((categoryData.amazon / categoryData.total) * 100).toFixed(0);
+                
+                const row = contractTable.insertRow();
+                row.innerHTML = `
+                    <td>${candidate.category}</td>
+                    <td>${formatCurrency(candidate.total)}</td>
+                    <td><span class="wells-color">${wellsPercent}% Wells</span> / <span class="amazon-color">${amazonPercent}% Amazon</span></td>
+                    <td>${candidate.count.toLocaleString()}</td>
+                    <td>${candidate.facilities}</td>
+                    <td style="color: #28a745; font-weight: bold">${formatCurrency(candidate.savings)}</td>
+                `;
+            });
+        }
+
+        function showFacilityBreakdown(facility) {
+            const facilityData = facilityOpportunityScores.find(f => f.facility === facility);
+            if (!facilityData) return;
+            
+            const breakdown = facilityData.scoreBreakdown;
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+            
+            modalTitle.textContent = `Facility ${facility} - Opportunity Score Breakdown`;
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <h4>Total Score: ${facilityData.totalScore}/100</h4>
+                    <p>This facility ranks as ${facilityData.totalScore >= 75 ? 'CRITICAL' : facilityData.totalScore >= 60 ? 'HIGH' : facilityData.totalScore >= 40 ? 'MEDIUM' : 'LOW'} opportunity for intervention.</p>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f7fafc;">
+                            <th style="padding: 12px; border: 1px solid #e2e8f0;">Score Component</th>
+                            <th style="padding: 12px; border: 1px solid #e2e8f0;">Points</th>
+                            <th style="padding: 12px; border: 1px solid #e2e8f0;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Clinical & Benefits Spending</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;"><strong>${breakdown.clinicalBenefits}/25</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${formatCurrency(facilityData.clinicalBenefitsSpend)} - High potential for master contracts</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Master Contract Opportunities</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;"><strong>${breakdown.masterContract}/20</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${facilityData.categoryCount} different expense categories</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Round/Duplicate Amounts</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;"><strong>${breakdown.duplicateRound}/15</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${formatCurrency(facilityData.roundAmountSpend)} in round amounts - potential fraud risk</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Transaction Volume</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;"><strong>${breakdown.transactionVolume}/20</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${facilityData.transactionCount.toLocaleString()} transactions - management complexity</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Purchase Timing Clusters</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;"><strong>${breakdown.clusters}/20</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${facilityData.clusterCount} suspicious timing patterns detected</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                    <h4>Recommended Actions:</h4>
+                    <ul>
+                        ${facilityData.totalScore >= 75 ? '<li><strong>URGENT:</strong> Immediate procurement review and training needed</li>' : ''}
+                        ${breakdown.clinicalBenefits >= 15 ? '<li>Negotiate master contracts for clinical supplies and employee benefits</li>' : ''}
+                        ${breakdown.duplicateRound >= 10 ? '<li>Investigate round-amount transactions for potential fraud</li>' : ''}
+                        ${breakdown.clusters >= 10 ? '<li>Review purchase timing patterns and approval processes</li>' : ''}
+                        ${breakdown.transactionVolume >= 15 ? '<li>Implement better procurement management systems</li>' : ''}
+                    </ul>
+                </div>
+            `;
+            
+            modalBody.innerHTML = html;
+            document.getElementById('detailModal').style.display = 'block';
+        }
+
+        function toggleSection(header) {
+            const section = header.parentElement;
+            const arrow = header.querySelector('span:last-child');
+            
+            section.classList.toggle('expanded');
+            arrow.textContent = section.classList.contains('expanded') ? '▼' : '▶';
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        }
+
+        function showHighValueTransactions() {
+            showModal('High-Value Transaction Sample', createTransactionTable(analysisResults.highValueTxns, 'Estimated total high-value transactions: ' + (analysisResults.highValueTxns.length * 10)));
+        }
+
+        function showRoundAmounts() {
+            showModal('Round Amount Transaction Sample', createTransactionTable(analysisResults.roundAmounts, 'Estimated total round amount transactions: ' + (analysisResults.roundAmounts.length * 10)));
+        }
+
+        function showPatternDetail(patternType, title) {
+            let patterns = [];
+            
+            if (patternType === 'amazonClusters') {
+                patterns = analysisResults.patterns.timingClusters.filter(c => c.paymentMethod === 'Amazon Direct');
+            } else if (patternType === 'wellsClusters') {
+                patterns = analysisResults.patterns.timingClusters.filter(c => c.paymentMethod === 'Wells Fargo');
+            } else {
+                patterns = analysisResults.patterns[patternType] || [];
+            }
+            
+            let content = '';
+
+            if (patternType === 'amazonClusters') {
+                content = '<p style="margin-bottom: 15px; color: #666;">Amazon Direct transactions clustered on the same day at the same facility. These represent actual purchase dates and may indicate suspicious purchasing patterns.</p>';
+                content += '<table style="width: 100%; border-collapse: collapse;"><thead><tr style="background: #f7fafc;"><th style="padding: 12px; border: 1px solid #e2e8f0;">Facility</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Date</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Amazon Transactions</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Risk Level</th></tr></thead><tbody>';
+                patterns.forEach(p => {
+                    const color = p.severity === 'High' ? '#e53e3e' : '#d69e2e';
+                    content += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">Facility ${p.facility}</td><td style="padding: 10px; border: 1px solid #e2e8f0;">${p.date}</td><td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${p.count}</td><td style="padding: 10px; border: 1px solid #e2e8f0; color: ${color}; font-weight: bold;">${p.severity}</td></tr>`;
+                });
+                content += '</tbody></table>';
+            } else if (patternType === 'wellsClusters') {
+                content = '<p style="margin-bottom: 15px; color: #666;">Wells Fargo credit card transactions processed on monthly statement dates. High volumes may indicate excessive emergency purchasing.</p>';
+                content += '<table style="width: 100%; border-collapse: collapse;"><thead><tr style="background: #f7fafc;"><th style="padding: 12px; border: 1px solid #e2e8f0;">Facility</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Statement Date</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Credit Card Transactions</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Statement Total</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Risk Level</th></tr></thead><tbody>';
+                patterns.forEach(p => {
+                    const color = p.severity === 'High' ? '#e53e3e' : '#d69e2e';
+                    content += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">Facility ${p.facility}</td><td style="padding: 10px; border: 1px solid #e2e8f0;">${p.date}</td><td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${p.count}</td><td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${formatCurrency(p.totalAmount || 0)}</td><td style="padding: 10px; border: 1px solid #e2e8f0; color: ${color}; font-weight: bold;">${p.severity}</td></tr>`;
+                });
+                content += '</tbody></table>';
+            } else if (patternType === 'duplicateAmounts') {
+                content = '<table style="width: 100%; border-collapse: collapse;"><thead><tr style="background: #f7fafc;"><th style="padding: 12px; border: 1px solid #e2e8f0;">Amount</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Occurrences</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Severity</th></tr></thead><tbody>';
+                patterns.forEach(p => {
+                    const color = p.severity === 'High' ? '#e53e3e' : p.severity === 'Medium' ? '#d69e2e' : '#38a169';
+                    content += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${formatCurrency(p.amount)}</td><td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${p.count}</td><td style="padding: 10px; border: 1px solid #e2e8f0; color: ${color}; font-weight: bold;">${p.severity}</td></tr>`;
+                });
+                content += '</tbody></table>';
+            }
+            // ... other pattern types can be added similarly
+
+            showModal(title + ` (${patterns.length} found)`, content);
+        }
+
+        function createTransactionTable(txns, description) {
+            let html = `<p style="margin-bottom: 20px; color: #666;">${description}</p>`;
+            html += '<table style="width: 100%; border-collapse: collapse;"><thead><tr style="background: #f7fafc;"><th style="padding: 12px; border: 1px solid #e2e8f0;">Date</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Facility</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Amount</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Payment Method</th><th style="padding: 12px; border: 1px solid #e2e8f0;">Category</th></tr></thead><tbody>';
+            
+            txns.forEach(txn => {
+                const paymentColor = txn.paymentMethod === 'Wells Fargo' ? '#6f42c1' : txn.paymentMethod === 'Amazon Direct' ? '#fd7e14' : '#666';
+                const paymentIcon = txn.paymentMethod === 'Wells Fargo' ? '💳' : txn.paymentMethod === 'Amazon Direct' ? '📦' : '❓';
+                
+                html += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">${txn.date}</td><td style="padding: 10px; border: 1px solid #e2e8f0;">Facility ${txn.facility}</td><td style="padding: 10px; border: 1px solid #e2e8f0; color: #e53e3e; font-weight: bold;">${formatCurrency(txn.amount)}</td><td style="padding: 10px; border: 1px solid #e2e8f0; color: ${paymentColor}; font-weight: bold;">${paymentIcon} ${txn.paymentMethod}</td><td style="padding: 10px; border: 1px solid #e2e8f0;">${txn.category}</td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function showModal(title, content) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').innerHTML = content;
+            document.getElementById('detailModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function exportResults() {
+            if (!analysisResults) return;
+
+            const date = new Date().toLocaleDateString();
+            let report = `SNF Opportunity Analysis Report - ${date}\n${'='.repeat(50)}\n\n`;
+            
+            report += `EXECUTIVE SUMMARY\n`;
+            report += `Total Spending: ${formatCurrency(analysisResults.totalSpending)}\n`;
+            report += `Total Transactions: ${analysisResults.totalTransactions.toLocaleString()}\n`;
+            report += `Facilities: ${analysisResults.totalFacilities}\n`;
+            report += `Potential Savings: ${formatCurrency(analysisResults.potentialSavings)}\n\n`;
+
+            const wellsData = analysisResults.paymentMethods['Wells Fargo'] || { total: 0, count: 0 };
+            const amazonData = analysisResults.paymentMethods['Amazon Direct'] || { total: 0, count: 0 };
+            
+            report += `PAYMENT METHOD BREAKDOWN\n`;
+            report += `Wells Fargo Credit Card: ${formatCurrency(wellsData.total)} (${wellsData.count.toLocaleString()} transactions)\n`;
+            report += `Amazon Direct: ${formatCurrency(amazonData.total)} (${amazonData.count.toLocaleString()} transactions)\n\n`;
+            
+            report += `TOP 10 OPPORTUNITY FACILITIES\n`;
+            facilityOpportunityScores.slice(0, 10).forEach((facility, index) => {
+                report += `${index + 1}. Facility ${facility.facility} - Score: ${facility.totalScore}/100 - Spending: ${formatCurrency(facility.totalSpending)}\n`;
+            });
+            
+            report += `\nTOP COST-SAVING OPPORTUNITIES\n`;
+            analysisResults.masterContractCandidates.slice(0, 10).forEach((c, i) => {
+                report += `${i+1}. ${c.category}: ${formatCurrency(c.savings)} potential savings\n`;
+            });
+
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `SNF_Opportunity_Analysis_${date.replace(/\//g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

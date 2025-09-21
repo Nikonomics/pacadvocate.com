@@ -31,13 +31,23 @@ class BillBase(BaseModel):
     sponsor: Optional[str] = None
     committee: Optional[str] = None
     chamber: Optional[str] = None
-    # Risk tracking fields
-    reimbursement_risk: Optional[int] = 0
-    staffing_risk: Optional[int] = 0
-    compliance_risk: Optional[int] = 0
-    quality_risk: Optional[int] = 0
-    total_risk_score: Optional[int] = 0
-    risk_tags: Optional[str] = None
+    # SNF-specific operational scoring fields
+    payment_impact: Optional[str] = None  # increase, decrease, neutral
+    operational_area: Optional[str] = None  # Staffing, Quality, Documentation, Survey, Payment
+    implementation_timeline: Optional[str] = None  # Immediate, Soon, Future
+    operational_tags: Optional[str] = None  # JSON array of operational impact tags
+
+    # Impact categorization fields
+    impact_type: Optional[str] = None  # Direct, Financial, Competitive, Indirect
+    impact_explanation: Optional[str] = None
+    ma_impact: Optional[bool] = False
+
+    # Comment period tracking fields
+    comment_deadline: Optional[datetime] = None
+    comment_url: Optional[str] = None
+    has_comment_period: Optional[bool] = False
+    comment_period_urgent: Optional[bool] = False
+    days_until_deadline: Optional[int] = None
 
 class BillCreate(BillBase):
     full_text: Optional[str] = None
@@ -61,6 +71,33 @@ class BillResponse(BillBase):
     created_at: datetime
     updated_at: datetime
     is_active: bool
+
+    # AI Analysis Fields
+    ai_relevance_score: Optional[int] = None
+    ai_impact_type: Optional[str] = None  # direct, financial, competitive, workforce
+    ai_relevant: Optional[bool] = None
+    ai_explanation: Optional[str] = None
+    ai_analysis_timestamp: Optional[str] = None
+
+    # Additional Dashboard Fields
+    effective_date: Optional[datetime] = None
+    rule_source_url: Optional[str] = None
+    rule_type: Optional[str] = None  # Proposed Rule, Final Rule, Bill
+    comment_period_urgent: Optional[bool] = None
+    days_until_deadline: Optional[int] = None
+
+    # Financial Impact Fields
+    financial_impact_pbpy: Optional[int] = None  # Per bed per year financial impact
+    financial_impact_details: Optional[str] = None  # JSON details of impact components
+
+    # Rule Summary Fields
+    executive_summary: Optional[str] = None  # Executive summary from Federal Register
+    key_provisions: Optional[str] = None  # JSON array of key provisions
+    implementation_timeline: Optional[str] = None  # JSON timeline with milestones
+    snf_action_items: Optional[str] = None  # JSON array of what SNFs need to do
+
+    # Impact Breakdown Field
+    impact_breakdown: Optional[str] = None  # JSON comprehensive impact analysis (Financial/Staffing/Quality/Compliance)
 
     class Config:
         from_attributes = True

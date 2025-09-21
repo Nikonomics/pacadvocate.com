@@ -27,13 +27,17 @@ class Bill(Base):
     is_active = Column(Boolean, default=True, index=True)
     relevance_score = Column(Float, index=True)  # AI-generated relevance score (0-100)
 
-    # Risk tracking fields
-    reimbursement_risk = Column(Integer, default=0)  # 0-40 scale
-    staffing_risk = Column(Integer, default=0)       # 0-30 scale
-    compliance_risk = Column(Integer, default=0)     # 0-20 scale
-    quality_risk = Column(Integer, default=0)        # 0-10 scale
-    total_risk_score = Column(Integer, default=0)    # 0-100 scale (sum of above)
-    risk_tags = Column(Text)                         # JSON array of applicable risk tags
+    # SNF-specific operational scoring fields
+    payment_impact = Column(String(20), index=True)  # increase, decrease, neutral
+    operational_area = Column(String(50), index=True)  # Staffing, Quality, Documentation, Survey, Payment
+    implementation_timeline = Column(String(20), index=True)  # Immediate (<30 days), Soon (30-90), Future (90+)
+    operational_tags = Column(Text)  # JSON array of operational impact tags
+
+    # Comment period tracking fields
+    comment_deadline = Column(DateTime, index=True)  # When public comments are due
+    comment_url = Column(String(500))                # Direct link to regulations.gov or comment portal
+    has_comment_period = Column(Boolean, default=False, index=True)  # Whether bill has active comment period
+    comment_period_urgent = Column(Boolean, default=False, index=True)  # <30 days remaining
 
     # Relationships
     versions = relationship("BillVersion", back_populates="bill", cascade="all, delete-orphan")
@@ -62,12 +66,10 @@ class BillCreate(BaseModel):
     sponsor: Optional[str] = None
     committee: Optional[str] = None
     chamber: Optional[str] = None
-    reimbursement_risk: Optional[int] = 0
-    staffing_risk: Optional[int] = 0
-    compliance_risk: Optional[int] = 0
-    quality_risk: Optional[int] = 0
-    total_risk_score: Optional[int] = 0
-    risk_tags: Optional[str] = None
+    payment_impact: Optional[str] = None
+    operational_area: Optional[str] = None
+    implementation_timeline: Optional[str] = None
+    operational_tags: Optional[str] = None
 
 class BillResponse(BaseModel):
     id: int
@@ -86,12 +88,10 @@ class BillResponse(BaseModel):
     updated_at: datetime
     is_active: bool
     relevance_score: Optional[float]
-    reimbursement_risk: Optional[int]
-    staffing_risk: Optional[int]
-    compliance_risk: Optional[int]
-    quality_risk: Optional[int]
-    total_risk_score: Optional[int]
-    risk_tags: Optional[str]
+    payment_impact: Optional[str]
+    operational_area: Optional[str]
+    implementation_timeline: Optional[str]
+    operational_tags: Optional[str]
 
     class Config:
         from_attributes = True

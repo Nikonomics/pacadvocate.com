@@ -32,53 +32,57 @@ def handle_null_risk_scores(bill_data: dict) -> dict:
 # @cached(**get_cache_config("bills_list"))
 async def get_bills(
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Page size"),
+    page_size: int = Query(10, ge=1, le=100, description="Page size"),
     state: Optional[str] = Query(None, description="Filter by state (federal, CA, TX, etc.)"),
     status: Optional[str] = Query(None, description="Filter by bill status"),
-    min_relevance_score: Optional[float] = Query(None, ge=0, le=100, description="Minimum relevance score"),
-    max_relevance_score: Optional[float] = Query(None, ge=0, le=100, description="Maximum relevance score"),
+    min_ai_relevance: Optional[float] = Query(50, ge=0, le=100, description="Minimum AI relevance score (default: 50)"),
+    max_ai_relevance: Optional[float] = Query(None, ge=0, le=100, description="Maximum AI relevance score"),
     date_from: Optional[datetime] = Query(None, description="Filter by date from"),
     date_to: Optional[datetime] = Query(None, description="Filter by date to"),
     search: Optional[str] = Query(None, description="Search in title and summary"),
     source: Optional[str] = Query(None, description="Filter by source"),
     chamber: Optional[str] = Query(None, description="Filter by chamber"),
-    sort_by: str = Query("relevance_score", description="Sort field"),
+    sort_by: str = Query("ai_relevance_score", description="Sort field"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
     db: Session = Depends(get_db)
 ):
     """
     Get paginated list of bills with filtering and sorting options
 
-    **Filters:**
+    **AI-Based Filtering (NEW):**
+    - Bills are now filtered by AI relevance score (default: >50) instead of keyword matching
+    - **min_ai_relevance**: Minimum AI relevance score (default: 50, shows only SNF-relevant bills)
+    - **max_ai_relevance**: Maximum AI relevance score
+
+    **Other Filters:**
     - **state**: Filter by state or federal level
     - **status**: Filter by bill status
-    - **min_relevance_score**: Minimum SNF relevance score (0-100)
-    - **max_relevance_score**: Maximum SNF relevance score (0-100)
     - **date_from/date_to**: Filter by last action date range
     - **search**: Search in bill title and summary
     - **source**: Filter by data source
     - **chamber**: Filter by legislative chamber
 
     **Sorting:**
-    - **sort_by**: Field to sort by (relevance_score, last_action_date, created_at, title)
+    - **sort_by**: Field to sort by (ai_relevance_score, last_action_date, created_at, title)
     - **sort_order**: asc or desc
     """
 
-    # Build query
+    # Build query - now using AI relevance filtering by default
     query = db.query(Bill).filter(Bill.is_active == True)
 
-    # Apply filters
+    # Apply AI relevance filtering (replaces old keyword-based filtering)
+    if min_ai_relevance is not None:
+        query = query.filter(Bill.ai_relevance_score >= min_ai_relevance)
+
+    if max_ai_relevance is not None:
+        query = query.filter(Bill.ai_relevance_score <= max_ai_relevance)
+
+    # Apply other filters
     if state:
         query = query.filter(Bill.state_or_federal == state)
 
     if status:
         query = query.filter(Bill.status.ilike(f"%{status}%"))
-
-    if min_relevance_score is not None:
-        query = query.filter(Bill.relevance_score >= min_relevance_score)
-
-    if max_relevance_score is not None:
-        query = query.filter(Bill.relevance_score <= max_relevance_score)
 
     if date_from:
         query = query.filter(Bill.last_action_date >= date_from)

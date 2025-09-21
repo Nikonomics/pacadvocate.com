@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNF Legislation Tracker - AI Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+        }
+        .bills-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .bill-item {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .bill-item:last-child {
+            border-bottom: none;
+        }
+        .bill-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .bill-title {
+            flex: 1;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-right: 15px;
+        }
+        .bill-score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: #667eea;
+            color: white;
+        }
+        .impact-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-right: 10px;
+        }
+        .impact-direct { background: #e3f2fd; color: #1976d2; }
+        .impact-financial { background: #f3e5f5; color: #7b1fa2; }
+        .bill-explanation {
+            color: #555;
+            font-style: italic;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 SNF Legislation Tracker</h1>
+            <div>🤖 AI-Powered • Top 9 Most Relevant Bills</div>
+        </div>
+        <div class="bills-container" id="billsContainer">
+            Loading bills...
+        </div>
+    </div>
+    <script>
+        const bills = [
+            {
+                "id": 102,
+                "title": "Medicare Program; FY 2026 Inpatient Psychiatric Facilities Prospective Payment System-Rate Update",
+                "ai_relevance_score": 95,
+                "ai_impact_type": "direct",
+                "ai_explanation": "Directly impacts SNF Medicare payments, quality measures, and operational requirements."
+            },
+            {
+                "id": 103,
+                "title": "Medicare Program; Inpatient Rehabilitation Facility Prospective Payment System for Federal Fiscal Year 2026",
+                "ai_relevance_score": 95,
+                "ai_impact_type": "direct",
+                "ai_explanation": "Directly impacts SNF Medicare payments, quality measures, and operational requirements."
+            },
+            {
+                "id": 104,
+                "title": "Medicare Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals (IPPS)",
+                "ai_relevance_score": 95,
+                "ai_impact_type": "direct",
+                "ai_explanation": "Directly impacts SNF Medicare payments, quality measures, and operational requirements."
+            },
+            {
+                "id": 105,
+                "title": "Medicare Program; Prospective Payment System and Consolidated Billing for Skilled Nursing Facilities",
+                "ai_relevance_score": 95,
+                "ai_impact_type": "direct",
+                "ai_explanation": "Directly impacts SNF Medicare payments, quality measures, and operational requirements."
+            },
+            {
+                "id": 58,
+                "title": "A bill to amend title XVIII of the Social Security Act to apply improved prompt payment requirements",
+                "ai_relevance_score": 70,
+                "ai_impact_type": "financial",
+                "ai_explanation": "Payment changes may affect SNF reimbursement rates and financial planning."
+            },
+            {
+                "id": 101,
+                "title": "Medicare Program; FY 2026 Hospice Wage Index and Payment Rate Update",
+                "ai_relevance_score": 70,
+                "ai_impact_type": "financial",
+                "ai_explanation": "Payment changes may affect SNF reimbursement rates and financial planning."
+            }
+        ];
+
+        function displayBills() {
+            const container = document.getElementById('billsContainer');
+            const billsHtml = bills.map(bill => {
+                const impactClass = `impact-${bill.ai_impact_type}`;
+                const impactEmoji = bill.ai_impact_type === 'direct' ? '🎯' : '💰';
+
+                return `
+                    <div class="bill-item">
+                        <div class="bill-header">
+                            <div class="bill-title">${bill.title}</div>
+                            <div class="bill-score">${bill.ai_relevance_score}</div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <span class="impact-badge ${impactClass}">
+                                ${impactEmoji} ${bill.ai_impact_type.toUpperCase()} IMPACT
+                            </span>
+                        </div>
+                        <div class="bill-explanation">
+                            💡 <strong>AI Analysis:</strong> ${bill.ai_explanation}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = billsHtml;
+        }
+
+        displayBills();
+    </script>
+</body>
+</html>
