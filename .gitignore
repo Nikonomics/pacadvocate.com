@@ -124,3 +124,6 @@ simple_*.py
 final_*.py
 *_test.py
 *_demo.py
+.claude/
+*.json.backup
+.CFUserTextEncoding
