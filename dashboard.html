@@ -929,6 +929,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <script>
+        // API Configuration - supports both local development and production
+        const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : 'https://snf-tracker-api.onrender.com';
+
         // Comprehensive bill data with all features
         const dashboardData = {
             "bills": [

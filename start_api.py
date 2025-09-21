@@ -10,9 +10,16 @@ import asyncio
 import argparse
 from datetime import datetime
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
 # Load environment variables
 load_dotenv()
+
+# Support local SQLite and Render PostgreSQL
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///snflegtracker.db')
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+engine = create_engine(DATABASE_URL)
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))

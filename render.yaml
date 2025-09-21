@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: snf-tracker-api
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn start_api:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: CONGRESS_API_KEY
+        sync: false
+      - key: LEGISCAN_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+databases:
+  - name: snftracker-db
+    plan: free
+    databaseName: snftracker
+    user: snftracker

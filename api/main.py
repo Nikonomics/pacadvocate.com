@@ -132,8 +132,7 @@ For issues or questions:
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["https://snflegtracker.com"],
-    allow_credentials=True,
+    allow_origins=["*"],  # Update to 'https://pacadvocate.com' later
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -266,11 +265,5 @@ async def api_info():
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        "api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.debug,
-        log_level="info" if settings.debug else "warning"
-    )
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
