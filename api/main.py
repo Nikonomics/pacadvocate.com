@@ -263,6 +263,17 @@ async def api_info():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+# Manual bill fetch endpoint
+@app.post("/api/v1/fetch-bills")
+async def trigger_bill_fetch():
+    """Manually trigger fetching of new bills"""
+    try:
+        # For now, return a success message
+        # TODO: Add actual bill fetching logic here
+        return {"message": "Bill fetch endpoint ready - fetching logic needs to be added"}
+    except Exception as e:
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
