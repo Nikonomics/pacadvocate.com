@@ -127,3 +127,4 @@ final_*.py
 .claude/
 *.json.backup
 .CFUserTextEncoding
+.claude.json.backup
