@@ -209,6 +209,39 @@ class FederalRegisterCollector:
         except Exception as e:
             logger.error(f"Failed to create keyword match: {e}")
 
+    def collect_snf_payment_documents(self,
+                                    year: int = None,
+                                    limit: int = 20) -> List[Dict]:
+        """Collect SNF payment system documents specifically"""
+        logger.info(f"Starting targeted SNF payment document collection for {year or 'current'} year")
+
+        try:
+            # Use the specialized SNF payment rules search
+            documents = self.client.search_snf_payment_rules(year=year, limit=limit)
+
+            if not documents:
+                logger.warning("No SNF payment documents found")
+                return []
+
+            logger.info(f"Found {len(documents)} SNF payment documents")
+
+            # Store documents in database
+            stored_bills = []
+            with Session(self.engine) as session:
+                for doc in documents:
+                    bill = self.store_document_as_bill(doc, session)
+                    if bill:
+                        stored_bills.append(bill)
+
+                session.commit()
+                logger.info(f"Successfully stored {len(stored_bills)} SNF payment documents as bills")
+
+            return documents
+
+        except Exception as e:
+            logger.error(f"SNF payment document collection failed: {e}")
+            return []
+
     def collect_cms_documents(self,
                             year: int = None,
                             limit: int = 50,
@@ -295,6 +328,7 @@ def main():
     parser.add_argument('--year', type=int, help='Year to search (e.g., 2025)')
     parser.add_argument('--limit', type=int, default=50, help='Maximum documents to collect')
     parser.add_argument('--all-cms', action='store_true', help='Collect all CMS documents, not just SNF-relevant')
+    parser.add_argument('--payment-rules', action='store_true', help='Collect SNF payment rules only (most targeted)')
     parser.add_argument('--test', action='store_true', help='Test API connection')
     parser.add_argument('--stats', action='store_true', help='Show collection statistics')
 
@@ -318,12 +352,19 @@ def main():
         return
 
     # Main collection
-    snf_only = not args.all_cms
-    documents = collector.collect_cms_documents(
-        year=args.year,
-        limit=args.limit,
-        snf_only=snf_only
-    )
+    if args.payment_rules:
+        print("🎯 Collecting SNF payment rules specifically...")
+        documents = collector.collect_snf_payment_documents(
+            year=args.year,
+            limit=args.limit
+        )
+    else:
+        snf_only = not args.all_cms
+        documents = collector.collect_cms_documents(
+            year=args.year,
+            limit=args.limit,
+            snf_only=snf_only
+        )
 
     print(f"✅ Collected {len(documents)} Federal Register documents")
 

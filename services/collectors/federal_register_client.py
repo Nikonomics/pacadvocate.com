@@ -145,12 +145,18 @@ class FederalRegisterClient:
             return None
 
     def extract_comment_periods(self, document_data: Dict) -> Dict:
-        """Extract comment period information from document data"""
+        """Extract comprehensive comment period information from document data"""
+        from datetime import datetime, date
+        import re
+
         comment_info = {
             'comment_start_date': None,
             'comment_end_date': None,
             'comment_url': None,
-            'has_comment_period': False
+            'has_comment_period': False,
+            'days_until_deadline': None,
+            'is_urgent': False,
+            'regulations_gov_url': None
         }
 
         # Check if document has comments
@@ -177,6 +183,58 @@ class FederalRegisterClient:
         if 'comment' in summary.lower() and ('period' in summary.lower() or 'due' in summary.lower()):
             comment_info['has_comment_period'] = True
 
+        # Create regulations.gov URL from document metadata
+        if comment_info['has_comment_period']:
+            # Try to get docket ID from various fields
+            docket_id = None
+
+            # Check regulation_id_number_info first
+            if document_data.get('regulation_id_number_info'):
+                reg_info = document_data['regulation_id_number_info']
+                if isinstance(reg_info, dict):
+                    docket_id = reg_info.get('docket_id') or reg_info.get('regulation_id_number')
+
+            # Check agencies for CMS docket patterns
+            if not docket_id and document_data.get('agencies'):
+                agencies = document_data['agencies']
+                if isinstance(agencies, list) and agencies:
+                    agency = agencies[0]
+                    if isinstance(agency, dict):
+                        # Look for CMS docket pattern in document number
+                        doc_number = document_data.get('document_number', '')
+                        if doc_number and 'CMS' in str(agency.get('name', '')):
+                            # Format as CMS docket ID
+                            docket_id = f"CMS-{doc_number}"
+
+            # Create regulations.gov URL if we have a docket ID
+            if docket_id:
+                comment_info['regulations_gov_url'] = f"https://www.regulations.gov/docket/{docket_id}/comments"
+
+        # Calculate days until deadline if we have an end date
+        if comment_info['comment_end_date']:
+            try:
+                # Parse the date string (Federal Register uses ISO format)
+                if isinstance(comment_info['comment_end_date'], str):
+                    end_date = datetime.fromisoformat(comment_info['comment_end_date'].replace('Z', '+00:00')).date()
+                elif isinstance(comment_info['comment_end_date'], datetime):
+                    end_date = comment_info['comment_end_date'].date()
+                elif isinstance(comment_info['comment_end_date'], date):
+                    end_date = comment_info['comment_end_date']
+                else:
+                    end_date = None
+
+                if end_date:
+                    today = date.today()
+                    days_remaining = (end_date - today).days
+                    comment_info['days_until_deadline'] = days_remaining
+
+                    # Flag as urgent if less than 30 days remaining
+                    comment_info['is_urgent'] = days_remaining < 30 and days_remaining >= 0
+
+            except (ValueError, TypeError) as e:
+                # If date parsing fails, log but don't crash
+                print(f"Warning: Could not parse comment deadline date: {comment_info['comment_end_date']}")
+
         return comment_info
 
     def extract_effective_date(self, document_data: Dict) -> Optional[str]:
@@ -198,52 +256,140 @@ class FederalRegisterClient:
 
         return None
 
-    def is_snf_relevant(self, document_data: Dict, snf_terms: List[str] = None) -> Dict:
-        """Check if document is relevant to skilled nursing facilities"""
-        if not snf_terms:
-            snf_terms = [
-                'skilled nursing facility', 'skilled nursing facilities', 'SNF', 'SNFs',
-                'nursing home', 'nursing homes', 'long-term care', 'post-acute care',
-                'Medicare Part A', 'PDPM', 'RUG', 'staffing ratio', 'star rating',
-                'five star quality rating', 'quality reporting program', 'survey',
-                'certification', 'reimbursement', 'payment system'
+    def get_snf_specific_search_terms(self) -> Dict[str, List[str]]:
+        """Get SNF-specific search terms organized by priority and type"""
+        return {
+            'high_priority_exact': [
+                "Skilled Nursing Facility Prospective Payment System",
+                "SNF Quality Reporting Program",
+                "SNF Prospective Payment System"
+            ],
+            'staffing_requirements': [
+                "minimum staffing",
+                "nurse staffing requirements",
+                "nursing home staffing",
+                "SNF staffing standards"
+            ],
+            'cms_operations': [
+                "State Operations Manual SNF",
+                "State Operations Manual skilled nursing",
+                "Survey and Certification nursing home",
+                "Survey and Certification SNF"
+            ],
+            'payment_systems': [
+                "PDPM",
+                "RUG-IV",
+                "Medicare Part A SNF",
+                "consolidated billing SNF"
+            ],
+            'quality_programs': [
+                "Five-Star Quality Rating",
+                "SNF Quality Reporting",
+                "nursing home compare",
+                "SNF star ratings"
             ]
+        }
+
+    def is_snf_relevant(self, document_data: Dict, snf_terms: List[str] = None) -> Dict:
+        """Check if document is relevant to skilled nursing facilities using targeted criteria"""
+
+        # Get SNF-specific search terms if not provided
+        if not snf_terms:
+            snf_search_terms = self.get_snf_specific_search_terms()
+            snf_terms = []
+            for category_terms in snf_search_terms.values():
+                snf_terms.extend(category_terms)
 
         relevance_info = {
             'is_relevant': False,
             'matched_terms': [],
             'confidence_score': 0.0,
-            'match_locations': []
+            'match_locations': [],
+            'exclusion_reason': None,
+            'match_category': None
         }
 
         # Combine searchable text
-        searchable_text = ' '.join([
-            document_data.get('title', ''),
-            document_data.get('abstract', ''),
-            ' '.join(document_data.get('topics', [])),
-            ' '.join([agency.get('name', '') for agency in document_data.get('agencies', [])]),
-        ]).lower()
+        title = document_data.get('title', '')
+        abstract = document_data.get('abstract', '')
+        topics = ' '.join(document_data.get('topics', []))
+        agencies = ' '.join([agency.get('name', '') for agency in document_data.get('agencies', [])])
 
+        searchable_text = f"{title} {abstract} {topics} {agencies}".lower()
+
+        # EXCLUSION CRITERIA - Rules to exclude documents that are NOT SNF-relevant
+        exclusion_terms = [
+            ('hospital', ['skilled nursing', 'nursing facility', 'SNF']),  # Skip if hospital-focused unless also mentions SNF
+            ('physician', ['skilled nursing', 'nursing facility', 'SNF']),  # Skip physician-only rules
+            ('ambulatory', ['skilled nursing', 'nursing facility', 'SNF']),  # Skip ambulatory care
+            ('outpatient', ['skilled nursing', 'nursing facility', 'SNF']),  # Skip outpatient-only
+            ('emergency department', []),  # Skip ED-focused rules
+            ('dialysis', ['skilled nursing', 'nursing facility', 'SNF']),  # Skip dialysis unless mentions SNF
+        ]
+
+        # Check exclusions
+        for exclusion_term, exceptions in exclusion_terms:
+            if exclusion_term in searchable_text:
+                # Check if any exception terms are present
+                has_exception = any(exception.lower() in searchable_text for exception in exceptions)
+                if not has_exception:
+                    relevance_info['exclusion_reason'] = f"Excluded: {exclusion_term}-focused rule"
+                    return relevance_info
+
+        # INCLUSION CRITERIA - Look for specific SNF-relevant terms
+        snf_search_terms = self.get_snf_specific_search_terms()
         matched_terms = []
         match_locations = []
+        confidence_weights = {
+            'high_priority_exact': 1.0,
+            'staffing_requirements': 0.9,
+            'cms_operations': 0.8,
+            'payment_systems': 0.8,
+            'quality_programs': 0.7
+        }
 
-        for term in snf_terms:
-            if term.lower() in searchable_text:
-                matched_terms.append(term)
-                if 'title' in document_data and term.lower() in document_data['title'].lower():
-                    match_locations.append('title')
-                if 'abstract' in document_data and term.lower() in document_data.get('abstract', '').lower():
-                    match_locations.append('abstract')
+        highest_confidence = 0.0
+        primary_match_category = None
 
-        if matched_terms:
+        # Check each category of terms
+        for category, terms in snf_search_terms.items():
+            category_matches = []
+            category_confidence = 0.0
+
+            for term in terms:
+                if term.lower() in searchable_text:
+                    category_matches.append(term)
+                    matched_terms.append(term)
+
+                    # Track match locations
+                    if term.lower() in title.lower():
+                        match_locations.append('title')
+                    if term.lower() in abstract.lower():
+                        match_locations.append('abstract')
+                    if term.lower() in topics.lower():
+                        match_locations.append('topics')
+
+            # Calculate confidence for this category
+            if category_matches:
+                base_weight = confidence_weights.get(category, 0.5)
+                match_bonus = min(len(category_matches) * 0.2, 0.4)
+                title_bonus = 0.3 if any(term.lower() in title.lower() for term in category_matches) else 0
+
+                category_confidence = base_weight + match_bonus + title_bonus
+
+                if category_confidence > highest_confidence:
+                    highest_confidence = category_confidence
+                    primary_match_category = category
+
+        # Determine if document is relevant
+        if matched_terms and highest_confidence >= 0.5:
             relevance_info['is_relevant'] = True
             relevance_info['matched_terms'] = matched_terms
             relevance_info['match_locations'] = list(set(match_locations))
-
-            # Simple confidence scoring based on matches
-            base_score = min(len(matched_terms) * 0.15, 0.9)
-            title_bonus = 0.1 if 'title' in match_locations else 0
-            relevance_info['confidence_score'] = min(base_score + title_bonus, 1.0)
+            relevance_info['confidence_score'] = min(highest_confidence, 1.0)
+            relevance_info['match_category'] = primary_match_category
+        else:
+            relevance_info['exclusion_reason'] = f"Insufficient SNF relevance (confidence: {highest_confidence:.2f})"
 
         return relevance_info
 
@@ -280,16 +426,31 @@ class FederalRegisterClient:
             publication_date_from = f"{year}-01-01"
             publication_date_to = f"{year}-12-31"
 
-        # Search with different term combinations
+        # Use SNF-specific search terms if none provided
+        if not search_terms:
+            snf_search_terms = self.get_snf_specific_search_terms()
+            search_terms = []
+            # Prioritize high-priority exact matches first
+            search_terms.extend(snf_search_terms['high_priority_exact'])
+            search_terms.extend(snf_search_terms['staffing_requirements'])
+            search_terms.extend(snf_search_terms['payment_systems'])
+
+        # Create targeted search queries
         search_queries = []
+
+        # Use exact phrase searches for better precision
         if search_terms:
-            # Search each term individually for broader coverage
-            search_queries.extend(search_terms)
-            # Also try combined search
-            search_queries.append(' '.join(search_terms[:3]))  # Limit to avoid too long queries
+            for term in search_terms[:8]:  # Limit queries to avoid rate limits
+                # Use quotes for exact phrase matching
+                if '"' not in term and ' ' in term:
+                    search_queries.append(f'"{term}"')
+                else:
+                    search_queries.append(term)
         else:
-            # If no terms specified, search for general CMS documents
-            search_queries = [None]
+            # Fallback to broad SNF search
+            search_queries = ['"skilled nursing facility"', '"nursing home"', 'PDPM', 'SNF']
+
+        logger.info(f"Using {len(search_queries)} targeted SNF search queries")
 
         for query in search_queries:
             if len(all_results) >= limit:
@@ -349,6 +510,74 @@ class FederalRegisterClient:
         logger.info(f"Total unique CMS documents found: {len(unique_results)}")
         return unique_results[:limit]
 
+    def search_snf_payment_rules(self, year: int = None, limit: int = 20) -> List[Dict]:
+        """
+        Search specifically for SNF payment system rules and updates
+
+        Args:
+            year: Year to search (defaults to current year)
+            limit: Maximum results to return
+
+        Returns:
+            List of relevant SNF payment rule documents
+        """
+        if not year:
+            year = datetime.now().year
+
+        logger.info(f"Searching for SNF payment rules for {year}...")
+
+        # Specific search terms for SNF payment rules
+        payment_search_terms = [
+            '"Skilled Nursing Facility Prospective Payment System"',
+            '"SNF Prospective Payment System"',
+            '"PDPM"',
+            '"Patient-Driven Payment Model"',
+            '"SNF Quality Reporting Program"',
+            '"Medicare Program" "skilled nursing"',
+            '"consolidated billing" SNF',
+            '"Part A payment" "skilled nursing"'
+        ]
+
+        results = []
+
+        # Search for each payment term
+        for search_term in payment_search_terms:
+            if len(results) >= limit:
+                break
+
+            logger.info(f"Searching for: {search_term}")
+
+            docs = self.search_cms_documents(
+                search_terms=[search_term.replace('"', '')],
+                document_types=['RULE', 'PRORULE'],
+                year=year,
+                limit=limit - len(results)
+            )
+
+            if docs:
+                # Filter for high-relevance SNF payment documents
+                for doc in docs:
+                    snf_relevance = doc.get('snf_relevance', {})
+                    if (snf_relevance.get('is_relevant', False) and
+                        snf_relevance.get('confidence_score', 0) >= 0.7 and
+                        snf_relevance.get('match_category') in ['high_priority_exact', 'payment_systems']):
+                        results.append(doc)
+
+        # Remove duplicates and sort by relevance
+        seen_docs = set()
+        unique_results = []
+        for doc in results:
+            doc_num = doc.get('document_number')
+            if doc_num and doc_num not in seen_docs:
+                seen_docs.add(doc_num)
+                unique_results.append(doc)
+
+        # Sort by publication date (newest first)
+        unique_results.sort(key=lambda x: x.get('publication_date', ''), reverse=True)
+
+        logger.info(f"Found {len(unique_results)} SNF payment rules for {year}")
+        return unique_results[:limit]
+
     def get_agencies(self) -> Optional[Dict]:
         """Get list of all agencies"""
         return self._make_request("agencies.json")
@@ -394,21 +623,53 @@ def test_client():
         print("❌ API connection failed.")
         return
 
-    print("\n🔍 Testing CMS document search...")
+    print("\n🔍 Testing SNF-specific document search...")
 
-    # Test CMS search
+    # Test SNF payment rules search
+    snf_payment_docs = client.search_snf_payment_rules(year=2025, limit=5)
+
+    if snf_payment_docs:
+        print(f"✅ Found {len(snf_payment_docs)} SNF payment rules for 2025")
+        for i, doc in enumerate(snf_payment_docs, 1):
+            snf_relevance = doc.get('snf_relevance', {})
+            print(f"  {i}. {doc.get('title', 'No title')[:80]}...")
+            print(f"     Type: {doc.get('type')} | Date: {doc.get('publication_date')}")
+            print(f"     SNF Relevance: {snf_relevance.get('confidence_score', 0):.1%}")
+            print(f"     Category: {snf_relevance.get('match_category', 'unknown')}")
+            if snf_relevance.get('matched_terms'):
+                print(f"     Matches: {', '.join(snf_relevance['matched_terms'][:3])}")
+    else:
+        print("❌ No SNF payment rules found for 2025")
+
+    # Test general CMS search with exclusions
+    print("\n🔍 Testing general CMS search with exclusions...")
     cms_docs = client.search_cms_documents(
-        search_terms=['Medicare', 'skilled nursing'],
         document_types=['RULE', 'PRORULE'],
-        year=2024,
-        limit=5
+        year=2025,
+        limit=10
     )
 
     if cms_docs:
-        print(f"✅ Found {len(cms_docs)} CMS documents")
-        for i, doc in enumerate(cms_docs[:3], 1):
-            print(f"  {i}. {doc.get('title', 'No title')[:80]}...")
-            print(f"     Type: {doc.get('type')} | Date: {doc.get('publication_date')}")
+        relevant_docs = [doc for doc in cms_docs if doc.get('snf_relevance', {}).get('is_relevant', False)]
+        excluded_docs = [doc for doc in cms_docs if doc.get('snf_relevance', {}).get('exclusion_reason')]
+
+        print(f"✅ Found {len(cms_docs)} total CMS documents")
+        print(f"   📋 {len(relevant_docs)} SNF-relevant documents")
+        print(f"   ❌ {len(excluded_docs)} excluded documents")
+
+        if relevant_docs:
+            print("\n📋 SNF-Relevant Documents:")
+            for i, doc in enumerate(relevant_docs[:3], 1):
+                snf_relevance = doc.get('snf_relevance', {})
+                print(f"  {i}. {doc.get('title', 'No title')[:60]}...")
+                print(f"     Confidence: {snf_relevance.get('confidence_score', 0):.1%}")
+
+        if excluded_docs:
+            print("\n❌ Excluded Documents (examples):")
+            for i, doc in enumerate(excluded_docs[:2], 1):
+                exclusion = doc.get('snf_relevance', {}).get('exclusion_reason', 'Unknown')
+                print(f"  {i}. {doc.get('title', 'No title')[:60]}...")
+                print(f"     Reason: {exclusion}")
     else:
         print("❌ No CMS documents found")
 

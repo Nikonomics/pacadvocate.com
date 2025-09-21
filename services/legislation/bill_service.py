@@ -17,11 +17,11 @@ class BillService:
         self.db.commit()
         self.db.refresh(db_bill)
 
-        # Process keywords for the new bill
-        try:
-            self.keyword_matcher.process_bill_keywords(db_bill.id)
-        except Exception as e:
-            print(f"Warning: Failed to process keywords for bill {db_bill.id}: {e}")
+        # DISABLED: Keyword processing replaced with AI relevance scoring
+        # try:
+        #     self.keyword_matcher.process_bill_keywords(db_bill.id)
+        # except Exception as e:
+        #     print(f"Warning: Failed to process keywords for bill {db_bill.id}: {e}")
 
         return db_bill
 
@@ -58,12 +58,12 @@ class BillService:
                 except Exception as e:
                     print(f"Warning: Failed to create status change alert: {e}")
 
-            # Reprocess keywords if content changed
-            if any(key in bill_update for key in ['title', 'summary', 'full_text']):
-                try:
-                    self.keyword_matcher.process_bill_keywords(bill_id)
-                except Exception as e:
-                    print(f"Warning: Failed to reprocess keywords: {e}")
+            # DISABLED: Keyword reprocessing replaced with AI relevance scoring
+            # if any(key in bill_update for key in ['title', 'summary', 'full_text']):
+            #     try:
+            #         self.keyword_matcher.process_bill_keywords(bill_id)
+            #     except Exception as e:
+            #         print(f"Warning: Failed to reprocess keywords: {e}")
 
         return bill
 
@@ -159,37 +159,22 @@ class BillService:
             db_query = db_query.filter(Bill.status == status)
 
         if keywords:
-            # Search bills that match any of the given keywords
-            from models.legislation import BillKeywordMatch, Keyword
-            keyword_ids = self.db.query(Keyword.id).filter(
-                Keyword.term.in_(keywords)
-            ).subquery()
-
-            bill_ids_with_keywords = self.db.query(BillKeywordMatch.bill_id).filter(
-                BillKeywordMatch.keyword_id.in_(keyword_ids)
-            ).subquery()
-
-            db_query = db_query.filter(Bill.id.in_(bill_ids_with_keywords))
+            # DISABLED: Keyword-based filtering replaced with AI relevance scoring
+            # Use AI relevance score instead of keyword matching
+            print("Warning: Keyword filtering disabled. Using AI relevance score >50 instead.")
+            db_query = db_query.filter(Bill.ai_relevance_score > 50)
 
         return db_query.order_by(Bill.last_action_date.desc()).offset(skip).limit(limit).all()
 
     def get_bills_by_keyword(self, keyword_term: str, min_confidence: float = 0.5) -> List[Bill]:
-        """Get bills that match a specific keyword"""
-        from models.legislation import BillKeywordMatch, Keyword
+        """DISABLED: Get bills that match a specific keyword (replaced with AI relevance)"""
+        print(f"Warning: Keyword search for '{keyword_term}' disabled. Returning AI-relevant bills (score >50) instead.")
 
-        # Find the keyword
-        keyword = self.db.query(Keyword).filter(Keyword.term == keyword_term).first()
-        if not keyword:
-            return []
-
-        # Get bills with high confidence matches
-        matches = self.db.query(BillKeywordMatch).filter(
-            BillKeywordMatch.keyword_id == keyword.id,
-            BillKeywordMatch.confidence_score >= min_confidence
-        ).order_by(BillKeywordMatch.confidence_score.desc()).all()
-
-        bill_ids = [match.bill_id for match in matches]
-        return self.db.query(Bill).filter(Bill.id.in_(bill_ids)).all()
+        # Return bills with AI relevance score >50 instead of keyword matching
+        return self.db.query(Bill).filter(
+            Bill.is_active == True,
+            Bill.ai_relevance_score > 50
+        ).order_by(Bill.ai_relevance_score.desc()).all()
 
     def get_recent_bills(self, days: int = 30, limit: int = 50) -> List[Bill]:
         """Get recently introduced or updated bills"""
