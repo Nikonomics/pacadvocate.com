@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 # Import routers
 from api.routers import auth, bills, alerts, dashboard
@@ -207,10 +208,10 @@ app.include_router(dashboard.router, prefix=settings.api_prefix)
 @app.get("/")
 async def serve_dashboard():
     """Serve the dashboard HTML file at root"""
-    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard.html")
-    if os.path.exists(dashboard_path):
-        return FileResponse(dashboard_path)
-    return {"message": "Dashboard not found"}
+    dashboard_path = Path(__file__).parent.parent / "dashboard.html"
+    if dashboard_path.exists():
+        return FileResponse(str(dashboard_path))
+    return {"message": "Dashboard not found", "path_checked": str(dashboard_path)}
 
 # Health check endpoint
 @app.get("/health")
