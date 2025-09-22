@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from contextlib import asynccontextmanager
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -204,26 +205,12 @@ app.include_router(dashboard.router, prefix=settings.api_prefix)
 
 # Root endpoint
 @app.get("/")
-async def root():
-    """API root endpoint with basic information"""
-    return {
-        "name": settings.app_name,
-        "version": settings.app_version,
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "docs": settings.docs_url,
-        "redoc": settings.redoc_url,
-        "api_prefix": settings.api_prefix,
-        "features": [
-            "JWT Authentication",
-            "Bill Management",
-            "Change Detection",
-            "Smart Alerts",
-            "Dashboard Analytics",
-            "Redis Caching",
-            "Rate Limiting"
-        ]
-    }
+async def serve_dashboard():
+    """Serve the dashboard HTML file at root"""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "..", "dashboard.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    return {"message": "Dashboard not found"}
 
 # Health check endpoint
 @app.get("/health")
